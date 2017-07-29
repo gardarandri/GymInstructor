@@ -10,7 +10,7 @@ import random
 import tensorflow as tf
 
 
-env = gym.make('CartPole-v0')
+env = gym.make('CartPole-v1')
 
 
 pltdat = {}
@@ -30,15 +30,17 @@ for alph, c in check_alphs:
 
     rev = []
     
-    for i_episode in range(400):
+    for i_episode in range(501):
         observation = env.reset()
+        #print(observation)
     
         agent.eps = max((1 - i_episode / 200.0) * 1.0, 0.01)
         #agent.eps = 0.1
 
         total_reward = 0
-        for t in range(200):
-            if i_episode % 23 == 0:
+        t = 0
+        while True:
+            if i_episode % 50 == 0:
                 env.render(mode="rgb_array")
     
             action = agent.make_action(observation)
@@ -54,6 +56,7 @@ for alph, c in check_alphs:
                 agent.end_episode()
                 print("Episode {} finished after {} timesteps".format(i_episode, t+1))
                 break
+            t += 1
         rev.append(total_reward)
 
     pltdat[(alph,c)] = rev

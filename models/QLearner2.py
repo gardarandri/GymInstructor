@@ -7,7 +7,7 @@ import collections
 
 
 class QAgent:
-    def __init__(self, state_space_size, action_space_size, eps=0.01, alpha=0.0003, gam=1.0, lam=0.99, C=20):
+    def __init__(self, state_space_size, action_space_size, gen_net, eps=0.01, alpha=0.0003, gam=1.0, lam=0.99, C=20):
         self.s_dim = state_space_size
         self.a_dim = action_space_size
         
@@ -24,14 +24,16 @@ class QAgent:
         self.eps = eps
         self.gradient_clip = 1e+10
 
-        self.batch_size = 64
+        self.number_of_actions = 0
+
+        self.batch_size = 32
         self.memory = collections.deque()
         self.memory_size = 1000000
         self.optimizer = tf.train.AdadeltaOptimizer(self.alpha)
         self.num_train_step = 0
         self.C = C
 
-        self._init_neural_net()
+        self._init_neural_net(gen_net)
         self._add_summary()
 
         self.sess = self._start_session()
@@ -42,59 +44,18 @@ class QAgent:
     def _lrelu(self, x):
         return tf.maximum(x,0.05*x)
 
-    def _init_neural_net(self, hidden_layers = None):
+    def _init_neural_net(self, gen_net):
         # Net
         with tf.variable_scope("input"):
-            self.state_input = tf.placeholder(tf.float32, (self.s_dim, None))
-
-        all_layers = [self.s_dim] + [8,16] + [self.a_dim]
+            self.state_input = tf.placeholder(tf.float32, [None]+self.s_dim)
 
         self.Q = self.state_input
         self.Q_target = self.state_input
 
-        assign_ops = []
-        train_vars = []
-        for i in range(1,len(all_layers)):
-            with tf.variable_scope("layer"+str(i)):
-                W1 = tf.Variable(tf.random_normal([
-                    all_layers[i],
-                    all_layers[i-1]
-                    ], stddev=1.0/math.sqrt(all_layers[i-1]*all_layers[i])))
-                self.Q = tf.matmul(W1, self.Q)
-                b1 = tf.Variable(tf.random_normal([
-                    all_layers[i],
-                    1
-                    ], stddev=1.0/math.sqrt(all_layers[i])))
-                self.Q = tf.add(self.Q, b1)
-                if i != len(all_layers)-1:
-                    #self.Q = tf.nn.relu(self.Q)
-                    self.Q = self._lrelu(self.Q)
-                    #self.Q = tf.nn.sigmoid(self.Q)
-    
-                train_vars.append(W1)
-                train_vars.append(b1)
-    
-                W2 = tf.Variable(tf.random_normal([
-                    all_layers[i],
-                    all_layers[i-1]
-                    ], stddev=1.0/math.sqrt(all_layers[i-1]*all_layers[i])))
-                self.Q_target = tf.matmul(W2, self.Q_target)
-                b2 = tf.Variable(tf.random_normal([
-                    all_layers[i],
-                    1
-                    ], stddev=1.0/math.sqrt(all_layers[i])))
-                self.Q_target = tf.add(self.Q_target, b2)
-                if i != len(all_layers)-1:
-                    self.Q_target = self._lrelu(self.Q_target)
-                    #self.Q_target = tf.nn.relu(self.Q_target)
-                    #self.Q_target = tf.nn.sigmoid(self.Q_target)
+        self.Q, self.train_vars = gen_net(self.Q,self.s_dim,self.a_dim)
+        self.Q_target, assign_vars = gen_net(self.Q_target,self.s_dim,self.a_dim)
 
-                assign_ops.append(W2.assign(W1))
-                assign_ops.append(b2.assign(b1))
-
-        self.assign_op = assign_ops
-
-        self.train_vars = train_vars
+        self.assign_op = [asv.assign(trv) for trv, asv in zip(self.train_vars, assign_vars)]
 
         with tf.variable_scope("training"):
             #Train
@@ -123,10 +84,10 @@ class QAgent:
         if len(self.memory) > self.batch_size:
             batch_sample = random.sample(self.memory, self.batch_size)
 
-            last_state = np.transpose(np.array([s[0] for s in batch_sample]))
+            last_state = np.array([s[0] for s in batch_sample])
             last_action = [np.argmax(s[1]) for s in batch_sample]
             last_reward = [s[2] for s in batch_sample]
-            at_state = np.transpose(np.array([s[3] for s in batch_sample]))
+            at_state = np.array([s[3] for s in batch_sample])
             is_done = [s[4] for s in batch_sample]
 
             feed_dict = {}
@@ -175,7 +136,7 @@ class QAgent:
         self.at_state = state
 
         Q_out = self.sess.run(self.Q, feed_dict={
-            self.state_input : np.array(state).reshape((self.s_dim,1))
+            self.state_input : np.array(state).reshape([1]+self.s_dim)
             })
 
         Q_out = Q_out.reshape((self.a_dim))
@@ -192,9 +153,11 @@ class QAgent:
 
         self.at_action = action
 
-        if self.last_action != None:
+        if self.number_of_actions > 2:
             self._add_to_memory()
             self._train_step()
+
+        self.number_of_actions += 1
 
         return action
 
@@ -202,11 +165,12 @@ class QAgent:
         self.last_reward = reward
 
     def end_episode(self):
-        if self.last_action != None:
+        if self.number_of_actions > 2:
             self._add_to_memory(done=True)
             self._train_step(True)
 
         # TODO: is this all that has to be reset?
+        self.number_of_actions = 0
         self.at_state = None
         self.at_action = None
         self.last_state = None

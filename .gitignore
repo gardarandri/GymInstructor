@@ -1,1 +1,5 @@
 *.pyc
+*.swp
+summaries/*
+tftest.py
+testgym.py
