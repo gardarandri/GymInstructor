@@ -72,7 +72,7 @@ for alph, c in check_alphs:
 
         observation = env.reset()
     
-        agent.eps = max((1 - i_episode / 10000.0) * 1.0, 0.1)
+        agent.eps = max((1 - i_episode / 1000.0) * 1.0, 0.1)
 
         to_render = True
         try:
