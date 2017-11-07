@@ -3,3 +3,5 @@
 summaries/*
 tftest.py
 testgym.py
+*.mp4
+*.json*

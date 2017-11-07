@@ -9,6 +9,7 @@ import math
 
 
 env = gym.make('Breakout-v0')
+use_device = '/cpu:0'
 
 def conv_layer(x, filter_size, stride, out_channels):
     in_channels = x.get_shape().as_list()[-1]
@@ -28,8 +29,9 @@ def net_function(Q, in_shape, out_shape):
     net_layout = [(5,8),(5,8),(5,8)]
 
     for fl,ch in net_layout:
-        Q, vl = conv_layer(Q, fl, 3, ch)
-        return_vars += vl
+	with tf.device(use_device):
+            Q, vl = conv_layer(Q, fl, 3, ch)
+            return_vars += vl
 
     dim = Q.get_shape().as_list()
     Q = tf.reshape(Q, [-1, np.prod(dim[1:])])
@@ -46,7 +48,7 @@ def net_function(Q, in_shape, out_shape):
 
 pltdat = {}
 check_alphs = []
-k = 4
+k = 1
 for alph in [1.0]:
     for c in [1]:
         check_alphs.append((alph,c))
@@ -81,7 +83,8 @@ for alph, c in check_alphs:
             to_render = False
             env.render(close=True)
 
-        to_record = i_episode % 2 == 0
+        #to_record = i_episode % 2 == 0
+        to_record = False
 
         if to_record:
             rec = gym.monitoring.VideoRecorder(env,"./breakoutvid_ep"+str(i_episode)+".mp4")

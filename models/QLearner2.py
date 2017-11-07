@@ -7,7 +7,7 @@ import collections
 
 
 class QAgent:
-    def __init__(self, state_space_size, action_space_size, gen_net, eps=0.01, alpha=0.0003, gam=1.0, lam=0.99, C=20):
+    def __init__(self, state_space_size, action_space_size, gen_net, eps=0.01, alpha=0.00003, gam=1.0, lam=0.99, C=20):
         self.s_dim = state_space_size
         self.a_dim = action_space_size
         
@@ -61,7 +61,7 @@ class QAgent:
             #Train
             self.target = tf.placeholder(tf.float32, [self.a_dim, None], name="target_input")
             self.loss = tf.reduce_mean((self.Q - self.target)**2,name="loss")
-            self.train = self.optimizer.minimize(self.loss, name="step", var_list=self.train_vars)
+            self.train = self.optimizer.minimize(self.loss, name="step", var_list=self.train_vars, colocate_gradients_with_ops=True)
 
 
     def _clip(self, t):
@@ -141,7 +141,7 @@ class QAgent:
 
         Q_out = Q_out.reshape((self.a_dim))
         self.Q_history.append(Q_out)
-        #print(Q_out)
+        print(Q_out)
 
         best_action_indx = np.argmax(Q_out)
         action = np.zeros((self.a_dim))
